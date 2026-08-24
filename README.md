@@ -1,66 +1,103 @@
-<img width="866" height="531" alt="tron" src="https://github.com/user-attachments/assets/ef14c3d8-c966-49ff-b233-eda76b70deff" />
+# tronAnalisys 2.0
 
+Analisi investigativa dei flussi TRX/TRC20 sulla rete TRON: dai seed a un grafo
+delle relazioni esportabile in Gephi.
 
-Blockchain Investigation Without Enterprise Platforms: From an Address to a Relationship Graph with Python and Open Source
+Refactor di `tron_graph-4.py` (711 righe in un file unico) in un package con
+test offline.
 
-When we talk about Blockchain Investigation, we immediately think of professional platforms like Chainalysis Reactor, Crystal Expert, TRM Forensics, Elliptic Investigator, Merkle Science Tracker, or Scorechain.
+## Installazione
 
-These are highly advanced tools, capable not only of reconstructing the movements of digital assets, but also of adding a crucial element for the investigator: intelligence on the identity and nature of the entities behind blockchain addresses.
+```bash
+pip install -e ".[dev]"
+```
 
-The most advanced platforms feature proprietary attribution databases, risk scoring systems, exchange and service identification, clustering heuristics, cross-chain tracing, bridge, swap, and mixer analysis, case management tools, and functions to produce results usable in structured investigations.
+Dipendenze: solo `requests` e `networkx`. La conversione base58check e' interna
+(prima serviva il pacchetto `base58`, importato dentro una funzione e con
+fallback silenzioso).
 
-But what happens when an analyst, researcher, student, or small investigative team doesn't have these enterprise platforms?
+## Uso
 
-An important part of the analysis can be achieved by leveraging a fundamental feature of public blockchains:
+```bash
+tron-analysis -i indirizzi.csv --direction both --depth 2 \
+              --asset auto --contract all --min-amount-trc20 100 \
+              --save-transfers -o indagine -v
+```
 
-Transactional data is public, queryable, and structureable.
+Le API key si risolvono nell'ordine: argomento CLI > `--keys file.csv` >
+variabili d'ambiente `TRONGRID_KEY` / `TRONSCAN_KEY`.
 
-## From wallet to graph
+Output (`indagine*`):
 
-Starting from this principle, I published the project **tronAnalisys** on GitHub, dedicated to analyzing flows on the **TRON** blockchain, a network particularly interesting due to the widespread use of TRC20 tokens like USDT.
+| File | Contenuto |
+| --- | --- |
+| `.gexf` | grafo per Gephi, con community e centralita' gia' calcolate |
+| `_nodes.csv` | nodi con tag, flag di rischio, volumi, livello BFS, metriche |
+| `_edges.csv` | archi aggregati per (mittente, destinatario, asset) con `first_seen`/`last_seen` |
+| `_transfers.csv` | singoli trasferimenti (con `--save-transfers`), per la timeline |
+| `_manifest.json` | parametri, statistiche, errori e SHA-256 degli output |
 
-The project's goal is quite simple: starting from one or more known addresses and transforming blockchain transactions into an **investigative graph**.
+## Cosa e' cambiato rispetto alla v1
 
-The Python program uses the **TronGrid** API and can integrate information from **TronScan**. Starting from the seed addresses, it builds a `MultiDiGraph` with NetworkX and performs a BFS (Breadth First Search) expansion with configurable depth. It can then reconstruct the first level of relationships, the second level, or additional levels, following incoming or outgoing transactions, or both.
+### Correttezza dei dati
 
-In other words:
+| Problema | Effetto | Fix |
+| --- | --- | --- |
+| Nessuna dedup dei trasferimenti | con `--direction both` la stessa tx veniva scaricata da entrambi i lati: importi e conteggi **raddoppiati** | `Transfer.dedup_key` + set globale |
+| `int(info.get("decimals", 6) or 6)` | i token con 0 decimali venivano divisi per 1e6 | lettura esplicita del campo |
+| `hex_to_base58` con `except: return hex_addr` | stesso indirizzo presente come due nodi distinti | `InvalidAddress` con validazione prefisso/lunghezza |
+| Transazioni native fallite incluse | archi per flussi mai avvenuti | controllo di `ret[0].contractRet` |
+| `--asset auto` | la classificazione veniva calcolata, stampata e ignorata (`auto` == `both`) | il risultato seleziona davvero gli endpoint |
+| `--min-amount` unico | 5 TRX e 5 USDT trattati allo stesso modo | `--min-amount-trx` / `--min-amount-trc20` |
+| Importi in `float` | perdita di precisione su valori grandi | `Decimal` internamente, `amount_exact` nell'export |
 
-**Wallet A → first-tier counterparties → second-tier counterparties → ...**
+### Robustezza
 
-Of course, we're talking about the connections **observable on-chain within the scope, asset, and timeframe defined by the analyst**.
+- **Niente perdita dati silenziosa**: prima un fetch fallito restituiva una
+  risposta vuota, indistinguibile da "nessuna transazione". Ora alza `ApiError`,
+  l'indirizzo viene marcato `fetch_error` e la scansione prosegue.
+- **Budget espliciti**: `--max-nodes`, `--max-degree` (gli hot wallet non
+  vengono espansi), `--max-transfers`.
+- **Retry sensati**: nessun tentativo ripetuto sui 4xx, `Retry-After`
+  rispettato, backoff con jitter, rate limiter condiviso fra thread.
+- **Paginazione protetta**: fingerprint ripetuti e `MAX_PAGES` non generano
+  piu' loop.
+- `Ctrl-C` esporta il grafo parziale invece di perdere tutto.
 
-The program manages TRX and TRC20 transfers, allows thresholds to be applied to amounts, aggregates transactions between the same counterparties, and calculates total incoming and outgoing values ​​for each node. It can also acquire public tags and indicators available via TronScan and recognize nodes classified as exchanges, services, or bridges.
+### Valore analitico
 
-This last aspect is particularly important.
+- Gli archi conservano `first_seen`, `last_seen`, `count` e un campione di
+  txid: la dimensione temporale prima veniva scartata da `_add_edge`.
+- Community detection (Louvain) e centralita' (degree, betweenness) calcolate
+  prima dell'export, cosi' il GEXF arriva in Gephi gia' colorabile.
+- Manifest di run con parametri, hash degli output e flag `complete`: senza
+  quel flag un grafo troncato da un budget e' indistinguibile da un grafo
+  completo.
+- Arricchimento TronScan parallelo e limitato ai nodi piu' rilevanti per
+  volume (prima: una chiamata sequenziale per ogni nodo del grafo).
 
-A centralized exchange or bridge often represents a sort of **investigative boundary**: the asset can continue its journey, but correctly attributing its subsequent movement may require off-chain data, information provided by the VASP, or professional cross-chain intelligence systems.
+## Struttura
 
-And this is precisely where the difference between **blockchain analysis** and **blockchain intelligence** emerges.
+```
+tron_analysis/
+├── addresses.py   base58check, validazione, input (seed, label, chiavi)
+├── http.py        rate limiter thread-safe, retry, statistiche
+├── trongrid.py    paginazione a cursore, finestre temporali
+├── tronscan.py    tag pubblici e flag di rischio, con cache
+├── parsing.py     record grezzi -> Transfer (Decimal)
+├── graph.py       BFS, dedup, budget, aggregazione archi, metriche
+├── export.py      GEXF, CSV, manifest
+└── cli.py         argomenti e orchestrazione
+```
 
-## Python as a Graph Analysis Engine
+```bash
+pytest -q   # 18 test, nessuna chiamata di rete
+```
 
-Once the transactions are collected, the problem is no longer necessarily "crypto."
+## Nota metodologica
 
-It becomes a classic **Network Analysis** problem.
-
-Addresses are nodes.
-
-Transactions are edges.
-
-Amounts, transaction frequency, assets, and timestamps become graph attributes.
-
-For this project, I chose **NetworkX**, which allows not only to represent the network but also to apply graph analytics algorithms.
-
-This opens up a very interesting second level of analysis: **community detection and network clustering**.
-
-NetworkX offers, for example, algorithms such as Louvain, label propagation, Girvan-Newman, and other tools for identifying structures and communities within a graph. Louvain searches for groups of nodes characterized by a higher density of internal connections by optimizing modularity. Implementations and backends for algorithms such as Leiden are also available.
-
-This allows us to move from a simple representation of transactions to more interesting questions:
-
-*Which addresses constitute a highly interconnected community? Which nodes act as hubs? Which addresses act as bridges between different clusters? Which nodes have high centrality? Where is the greatest economic flow concentrated?*
-
-However, a fundamental methodological clarification is necessary:
-
-**A mathematically identified community does not automatically equate to a cluster of addresses belonging to the same person or organization.**
-
-Community detection generates an analytical hypothesis based on the structure of relationships. Attribution requires additional evidence, specific heuristics, OSINT, and off-chain data.
+Una community individuata da Louvain e' un'ipotesi strutturale: non equivale a
+un cluster di indirizzi riconducibili allo stesso soggetto. L'attribuzione
+richiede evidenze ulteriori, euristiche specifiche, OSINT e dati off-chain.
+CEX e bridge restano un confine investigativo: il flag `boundary` segnala dove
+la ricostruzione on-chain si ferma.
