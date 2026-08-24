@@ -1,0 +1,2 @@
+address,type,name,risk,is_contract,source,confidence,evidence
+TR7NHqjeKQxGTCi8q8ZY4pL8otSzgjLj6t,token_contract,USDT TRC20,false,true,manual,high,Tether USDT contract on TRON
