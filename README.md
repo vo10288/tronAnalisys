@@ -1,4 +1,5 @@
-![Uploading Screenshot 2026-08-24 alle 10.05.53.png…]()
+<img width="866" height="531" alt="tron" src="https://github.com/user-attachments/assets/ef14c3d8-c966-49ff-b233-eda76b70deff" />
+
 
 Blockchain Investigation Without Enterprise Platforms: From an Address to a Relationship Graph with Python and Open Source
 
