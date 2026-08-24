@@ -1,3 +1,5 @@
+![Uploading Screenshot 2026-08-24 alle 10.05.53.png…]()
+
 Blockchain Investigation Without Enterprise Platforms: From an Address to a Relationship Graph with Python and Open Source
 
 When we talk about Blockchain Investigation, we immediately think of professional platforms like Chainalysis Reactor, Crystal Expert, TRM Forensics, Elliptic Investigator, Merkle Science Tracker, or Scorechain.
