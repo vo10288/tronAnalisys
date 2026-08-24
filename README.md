@@ -1,4 +1,4 @@
-# tronAnalisys 2.0
+# tronAnalisys 2.0 (migliorato con ChatGPT)
 
 **Open-source TRON blockchain investigation and graph analysis toolkit.**
 
