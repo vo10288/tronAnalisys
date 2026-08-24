@@ -1,4 +1,4 @@
-# tronAnalisys 2.0
+# tronAnalisys 2.0 (migliorato/perfezionato con Claud.ai)
 
 Analisi investigativa dei flussi TRX/TRC20 sulla rete TRON: dai seed a un grafo
 delle relazioni esportabile in Gephi.
