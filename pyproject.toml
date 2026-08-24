@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tronAnalisys"
+version = "2.0.0"
+description = "Open-source TRON blockchain investigation and graph analysis toolkit"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "requests>=2.31",
+  "networkx>=3.2",
+]
+
+[project.scripts]
+tron-analysis = "tronanalysis.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["tronanalysis*"]
